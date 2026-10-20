@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# omarchy:summary=Re-arm the lock's fingerprint reader and reconcile displays when the lid opens
+# omarchy:group=system
+# omarchy:hidden=true
+
+# A reader that is hidden while the lid is shut, as Touch ID is on Apple
+# Silicon, comes back when it opens. A docked laptop opens its lid without a
+# resume, so nothing else tells the lock, which would otherwise wait out a
+# backoff of up to 40 seconds before looking for the reader again. The shell
+# ignores this unless it is locked, and a missing shell must not stop the
+# display reconciliation behind it.
+omarchy-shell lock lidOpened >/dev/null 2>&1 || true
+
+omarchy-hyprland-monitor-clamshell

@@ -99,10 +99,10 @@ grep -F 'omarchy-hyprland-monitor-external-active' "$monitor_mirror" >/dev/null
 pass "internal mirror helper recovers when no active external display remains"
 
 grep -F 'switch:on:Lid Switch", nil, "omarchy-system-lid-close"' "$utilities" >/dev/null
-grep -F 'switch:off:Lid Switch", nil, "omarchy-hyprland-monitor-clamshell"' "$utilities" >/dev/null
+grep -F 'switch:off:Lid Switch", nil, "omarchy-system-lid-open"' "$utilities" >/dev/null
 grep -F 'switch:on:Apple SMC power/lid events", nil, "omarchy-system-lid-close"' "$utilities" >/dev/null ||
   fail "closing an Apple Silicon lid runs the same lid-close as any laptop"
-grep -F 'switch:off:Apple SMC power/lid events", nil, "omarchy-hyprland-monitor-clamshell"' "$utilities" >/dev/null ||
+grep -F 'switch:off:Apple SMC power/lid events", nil, "omarchy-system-lid-open"' "$utilities" >/dev/null ||
   fail "opening an Apple Silicon lid restores the panel like any laptop"
 pass "lid switch bindings lock on close and reconcile clamshell display state"
 

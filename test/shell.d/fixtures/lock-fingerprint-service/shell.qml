@@ -54,6 +54,9 @@ ShellRoot {
       check(!service.fingerprintConfigured && service.fingerprintUnavailable, "an initial outage shows unavailable without inventing enrollment")
       service.nudgeFingerprint()
       check(recheck.interval === 250, "input promptly retries an initial unknown probe")
+      recheck.interval = 4000
+      service.rearmFingerprintOnLidOpen()
+      check(service.fingerprintProbeStreak === 0 && !recheck.running, "an opening lid asks again at once about a reader hidden while it was shut")
 
       service.applyFingerprintProbe("Fingerprints for user test on Goodix:\n - #0: right-index-finger")
       check(service.fingerprintConfigured, "a real enrollment row enables fingerprint")
@@ -157,6 +160,37 @@ ShellRoot {
       check(!service.fingerprintAuthenticating && !reach.running, "the reach bound closes a stuck attempt")
       check(service.lockRequested, "a timeout never unlocks")
 
+      // A docked lid opens with no resume for the sleep watch to see, so the
+      // lid-open call is what drops the backoff a hidden reader built up.
+      service.fingerprintResumedAtMs = 0
+      for (var m = 0; m < 8; m++) {
+        service.fingerprintAuthenticating = true
+        service.fingerprintAttemptReachedDevice = false
+        service.settleFingerprintAttempt()
+      }
+      check(retry.interval === 40000 && service.fingerprintUnavailable, "a reader hidden while the lid is shut backs off to the cap")
+      service.rearmFingerprintOnLidOpen()
+      check(service.fingerprintUnreachedStreak === 0 && !service.fingerprintUnavailable, "an opening lid forgets the misses from while it was shut")
+      check(retry.running && retry.interval === 250, "an opening lid retries at once instead of waiting out the cap")
+      service.fingerprintAuthenticating = true
+      service.fingerprintAttemptReachedDevice = false
+      service.settleFingerprintAttempt()
+      check(service.fingerprintUnreachedStreak === 1 && retry.interval === 1000, "a miss while fprintd adds the reader back stays at the first tier")
+      service.fingerprintAuthenticating = true
+      service.rearmFingerprintOnLidOpen()
+      check(service.fingerprintAuthenticating, "an attempt in flight when the lid opens is left to find the reader")
+      service.fingerprintAuthenticating = false
+      retry.stop()
+      service.fingerprintResumedAtMs = 0
+      service.fingerprintRetryDueMs = Date.now() + 40000
+      service.fingerprintRetryBackoffMs = 40000
+      service.pauseFingerprint()
+      service.rearmFingerprintOnLidOpen()
+      check(!retry.running && service.fingerprintPaused, "an opening lid leaves a blank lock's reader paused")
+      service.resumeFingerprint()
+      check(retry.running && retry.interval === 250, "the wake after an opening lid retries at once")
+      retry.stop()
+
       // runBlank and runWake would drive the real displays, so the pause they
       // call is exercised directly.
       var sleepWatch = timer(service, 1000, true)
@@ -237,6 +271,8 @@ ShellRoot {
       check(!service.fingerprintPaused, "unlock reset clears a pause so the next lock starts the reader")
       service.applyFingerprintProbe("Daemon is restarting")
       check(!recheck.running, "an unknown probe outside the lock cannot restart it")
+      service.rearmFingerprintOnLidOpen()
+      check(!retry.running && !recheck.running, "an opening lid does nothing while unlocked")
     } finally {
       service.lockRequested = false
       service.resetAuthenticationState()

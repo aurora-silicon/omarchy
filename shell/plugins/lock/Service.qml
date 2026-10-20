@@ -338,10 +338,10 @@ Item {
   }
 
   // Reset pre-sleep failures while the resume hook restarts fprintd.
-  function noteFingerprintResumed() {
+  function noteFingerprintResumed(reason) {
     var now = Date.now()
     if (FingerprintModel.inResumeGrace(now, fingerprintResumedAtMs)) return
-    logEvent("fingerprint-resume: streak=" + fingerprintUnreachedStreak)
+    logEvent("fingerprint-" + (reason || "resume") + ": streak=" + fingerprintUnreachedStreak)
     fingerprintResumedAtMs = now
     fingerprintUnreachedStreak = 0
   }
@@ -355,6 +355,26 @@ Item {
       return
     }
     if (!fingerprintRetryTimer.running) return
+    armFingerprintRetry(FingerprintModel.MATCH_RETRY_MS)
+  }
+
+  // Some readers (Touch ID on Apple Silicon) are gone while the lid is shut and
+  // return when it opens, with no suspend for the sleep watch to see. The misses
+  // and backoff built up while it was gone say nothing about it now, so start
+  // over as a resume does, with the same grace while fprintd adds it back.
+  function rearmFingerprintOnLidOpen() {
+    if (!lockRequested) return
+    if (!fingerprintConfigured) {
+      // Only a probe that could not reach the reader is waiting to be retried.
+      if (!fingerprintRecheckTimer.running) return
+      fingerprintProbeStreak = 0
+      fingerprintRecheckTimer.stop()
+      refreshFingerprintStatus()
+      return
+    }
+    noteFingerprintResumed("lid-open")
+    // An attempt in flight may be the one that finds the reader again.
+    if (fingerprintPam.active || fingerprintAuthenticating) return
     armFingerprintRetry(FingerprintModel.MATCH_RETRY_MS)
   }
 
@@ -943,6 +963,12 @@ Item {
       // omarchy-system-sleep-lock asks for the lock before every suspend.
       if (root.currentlyLocked()) root.noteSleepRequested()
       if (!root.currentlyLocked() && !root.beginLock()) return "failed"
+      return "ok"
+    }
+
+    // omarchy-system-lid-open, from the lid-open switch binding.
+    function lidOpened(): string {
+      root.rearmFingerprintOnLidOpen()
       return "ok"
     }
 
